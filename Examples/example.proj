@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    
+    <UsingTask TaskName="Flatten.Task.FlatMap" AssemblyFile=".\path\to\Flatten.Task.dll"/>
+
+    <Target Name="Flatten">      
+        <ItemGroup>
+            <composite Include="victim1.proj" />
+            <composite Include="victim2.proj" />
+        </ItemGroup>
+        
+        <!-- non-prefixed namespaced documents, like typical msbuild projects, should reference KeyName parameters as follows:
+             KeyName="{NAMESPACE_URI}COMPOSITE_CONTAINER_NAME"
+             
+             Specifically, for MSBuild projects:
+             KeyName="{http://schemas.microsoft.com/developer/msbuild/2003}COMPOSITE_CONTAINER_NAME"
+        -->     
+        <FlatMap XmlFiles="@(composite)" 
+                 ElementSelector="/*[local-name()='Project']/*[local-name()='ItemGroup']/*[local-name()='COMPOSITE_ITEM']" 
+                 KeyName="COMPOSITE_CONTAINER_NAME" 
+                 ResultPrefix="flattened"
+                 Delimiters="; ,">
+            <Output TaskParameter="Results" ItemName="Flattened" />
+        </FlatMap>
+        
+        <Message Text="Flattened Results: @(Flattened)" />
+    </Target>
+    
+</Project>
