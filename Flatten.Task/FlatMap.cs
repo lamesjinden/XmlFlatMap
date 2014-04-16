@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Xml.Linq;
 using Flatten.Core;
 using Microsoft.Build.Framework;
@@ -12,6 +13,8 @@ namespace Flatten.Task
     {
 
         private const string DefaultPrefix = "flat";
+
+        #region Task Parameters
 
         [Required]
         public ITaskItem[] XmlFiles { get; set; }
@@ -29,58 +32,35 @@ namespace Flatten.Task
         [Output]
         public string[] Results { get; set; }
 
-        private void LogExecutionState()
-        {
-            Log.LogMessage(MessageImportance.High, "ElementSelector={0}", ElementSelector);
-            Log.LogMessage(MessageImportance.High, "KeyName={0}", KeyName);
-            if (!string.IsNullOrWhiteSpace(ResultPrefix)) Log.LogMessage(MessageImportance.High, "ResultPrefix={0}", ResultPrefix);
-            if (!string.IsNullOrWhiteSpace(Delimiters)) Log.LogMessage(MessageImportance.High, "Delimiters={0}", string.Join("", Delimiters.ToCharArray()));
-        }
+        #endregion
 
         public override bool Execute()
         {
-            LogExecutionState();
+            LogEnvironment();
 
             List<string> results = new List<string>();
             foreach (var item in XmlFiles)
             {
-                Log.LogMessage("Processing {0}...", item.ItemSpec);
+                var documentPath = item.ItemSpec;
+
+                Log.LogMessage("Processing {0}...", documentPath);
 
                 try
                 {
-                    XDocument flattenedDocument;
-                    using (var stream = new FileStream(item.ItemSpec, FileMode.Open, FileAccess.Read, FileShare.Read))
-                    {
-                        var xdocument = XDocument.Load(stream);
-                        var delimiters = string.IsNullOrWhiteSpace(Delimiters)
-                                             ? Flattener.DefaultDelimiters
-                                             : Delimiters.ToCharArray();
-                        flattenedDocument = Flattener.Flatten(xdocument, ElementSelector, KeyName, delimiters);
-                    }
-
-                    var directoryName = Path.GetDirectoryName(item.ItemSpec);
-                    var originalName = Path.GetFileName(item.ItemSpec);
-                    string flattenedName = string.Format("{0}.{1}",
-                                               string.IsNullOrWhiteSpace(ResultPrefix) 
-                                                   ? DefaultPrefix 
-                                                   : ResultPrefix,
-                                               originalName);
-                    var flattenedPath = Path.Combine(directoryName, flattenedName);
+                    var flattenedPath = GetResultPath(documentPath);
                     
                     if (File.Exists(flattenedPath)) Log.LogMessage(MessageImportance.High, "Overwriting {0}", flattenedPath);
 
-                    using (var stream = new FileStream(flattenedPath, FileMode.Create, FileAccess.Write, FileShare.Read))
-                    {
-                        flattenedDocument.Save(stream, SaveOptions.None);
-                    }
+                    results.Add(
+                        WriteXDoc(
+                            FlattenDocument(documentPath), 
+                            flattenedPath));
 
-                    results.Add(flattenedPath);
-
-                    Log.LogMessage("Processing {0} completed successfully", item.ItemSpec);
+                    Log.LogMessage("Processing {0} completed successfully", documentPath);
                 }
                 catch (Exception exception)
                 {
-                    Log.LogError("Processing {0} failed", item.ItemSpec);
+                    Log.LogError("Processing {0} failed", documentPath);
                     Log.LogErrorFromException(exception);
 
                     return false;
@@ -90,6 +70,57 @@ namespace Flatten.Task
             }
 
             return true;                       
+        }
+
+        private void LogEnvironment()
+        {
+            Log.LogMessage(MessageImportance.High, "ElementSelector={0}", ElementSelector);
+            Log.LogMessage(MessageImportance.High, "KeyName={0}", KeyName);
+            if (!string.IsNullOrWhiteSpace(ResultPrefix)) Log.LogMessage(MessageImportance.High, "ResultPrefix={0}", ResultPrefix);
+            if (!string.IsNullOrWhiteSpace(Delimiters)) Log.LogMessage(MessageImportance.High, "Delimiters={0}", new string(Delimiters.ToCharArray()));
+        }
+
+        public XDocument FlattenDocument(string documentPath)
+        {
+            var delimiters = string.IsNullOrWhiteSpace(Delimiters)
+                                 ? Flattener.DefaultDelimiters
+                                 : Delimiters.ToCharArray();
+            return FlattenDocument(documentPath, ElementSelector, KeyName, delimiters);
+        }
+
+        public static XDocument FlattenDocument(string documentPath, string elementSelector, string keyName, IEnumerable<char> delimiters)
+        {
+            using (var stream = new FileStream(documentPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var xdocument = XDocument.Load(stream);
+                return Flattener.Flatten(xdocument, elementSelector, keyName, delimiters);
+            }
+        }
+
+        public string GetResultPath(string documentPath)
+        {
+            var prefix =  string.IsNullOrWhiteSpace(ResultPrefix)
+                              ? DefaultPrefix
+                              : ResultPrefix;
+            return GetResultPath(documentPath, prefix);
+        }
+
+        public static string GetResultPath(string documentPath, string prefix)
+        {
+            var directoryName = Path.GetDirectoryName(documentPath) ?? string.Empty;
+            var originalName = Path.GetFileName(documentPath);
+            string flattenedName = string.Format("{0}.{1}", prefix, originalName);
+            return Path.Combine(directoryName, flattenedName);
+        }
+
+        public static string WriteXDoc(XDocument xdoc, string destination)
+        {
+            using (var stream = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.Read))
+            {
+                xdoc.Save(stream, SaveOptions.None);
+            }
+
+            return destination;
         }
 
     }

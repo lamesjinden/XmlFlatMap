@@ -42,9 +42,9 @@ namespace Flatten.Core
         /// <param name="src">Source XDocument instance</param>
         /// <param name="xpath">XPath expression to select elements containing composite values</param>
         /// <param name="child">Name of the child elemement of elements returned by <paramref name="xpath"/>, potentially containing composite values</param>
-        /// <param name="delimiters">array of delimiting charaters</param>
+        /// <param name="delimiters">sequence of delimiting charaters</param>
         /// <returns>New XDocument instance</returns>
-        public static XDocument Flatten(XDocument src, string xpath, XName child, char[] delimiters)
+        public static XDocument Flatten(XDocument src, string xpath, XName child, IEnumerable<char> delimiters)
         {
             var local = new XDocument(src);
             var delimitersSet = new HashSet<char>(delimiters);
